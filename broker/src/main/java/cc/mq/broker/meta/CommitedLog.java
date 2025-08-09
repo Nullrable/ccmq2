@@ -31,6 +31,9 @@ public class CommitedLog {
     public byte[] get(final String topic, final Integer queueId, final Integer consumeOffset) throws IOException {
 
         IndexedMeta indexedMeta = indexedStore.get(topic, queueId, consumeOffset);
+        if (indexedMeta == null) {
+            return null;
+        }
 
         long offset = indexedMeta.getOffset();
 

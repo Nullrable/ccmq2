@@ -13,6 +13,18 @@ public class IndexedStore {
 
     protected final ConcurrentMap<String/* topic */, ConcurrentMap<Integer/* queueId */, IndexedQueue>> indexedQueueTable = new ConcurrentHashMap<>();
 
+    public Long getTareIndex(String topic, Integer queueId) {
+        ConcurrentMap<Integer/* queueId */, IndexedQueue> mappedQueue = indexedQueueTable.get(topic);
+        if (mappedQueue == null) {
+            return 0L;
+        }
+        IndexedQueue indexedQueue = mappedQueue.get(queueId);
+        if (indexedQueue == null) {
+            return 0L;
+        }
+        return indexedQueue.getTareIndex();
+    }
+
     public Boolean write(IndexedMeta log) throws IOException {
 
         IndexedQueue indexedQueue = null;
@@ -24,7 +36,7 @@ public class IndexedStore {
             mappedQueue.put(log.getQueueId(), indexedQueue);
             indexedQueueTable.put(log.getTopic(), mappedQueue);
         } else {
-            indexedQueue =  mappedQueue.get(log.getQueueId());
+            indexedQueue = mappedQueue.get(log.getQueueId());
             if (indexedQueue == null) {
                 indexedQueue = new IndexedQueue(log.getTopic(), log.getQueueId());
                 mappedQueue.put(log.getQueueId(), indexedQueue);
@@ -40,11 +52,11 @@ public class IndexedStore {
         ConcurrentMap<Integer/* queueId */, IndexedQueue> mappedQueue = indexedQueueTable.get(topic);
 
         if (mappedQueue == null) {
-          return null;
+            return null;
         } else {
-            indexedQueue =  mappedQueue.get(queueId);
+            indexedQueue = mappedQueue.get(queueId);
             if (indexedQueue == null) {
-               return null;
+                return null;
             }
         }
         return indexedQueue.get(consumeOffset);

@@ -1,13 +1,13 @@
-package cc.mq.broker;
+package cc.mq.client;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class BrokerApplication {
+public class ClientApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(BrokerApplication.class, args);
+        SpringApplication.run(ClientApplication.class, args);
     }
 
 }

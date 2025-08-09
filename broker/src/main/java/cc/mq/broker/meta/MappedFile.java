@@ -105,10 +105,6 @@ public class MappedFile {
         }
     }
 
-    public Integer position() {
-        return buffer.position();
-    }
-
     public byte[] getMessage(final Integer pos, final Integer size) {
 
         byte[] strBytes = new byte[size];
