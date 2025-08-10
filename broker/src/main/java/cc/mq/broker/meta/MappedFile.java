@@ -41,8 +41,6 @@ public class MappedFile {
         this.fileFromOffset = fileFromOffset;
         this.fileSize = fileSize;
         this.lastWritePosition = new AtomicInteger(0);
-
-        recover();
     }
 
     public boolean isFull(Integer writeFileSize) {
@@ -50,25 +48,11 @@ public class MappedFile {
         return curPos + writeFileSize >= fileSize;
     }
 
-    private void recover() {
-        while (true) {
-            long offset = buffer.getLong();  // 8字节 commitlog offset
-            int size = buffer.getInt();    // 4字节 消息大小
-            long tag = buffer.getLong();   // 8字节 tag hashCode
 
-            if (offset >= 0 && size > 0) {
-                // 有效记录，更新索引
-                lastWritePosition.set(lastWritePosition.get() + 20);
-            } else {
-                break; // 无效/空洞，扫描结束
-            }
-        }
-        buffer.position(lastWritePosition.get());
-    }
 
 
     @SneakyThrows
-    protected static MappedFile createNew(final String path, final Long fileOffset, final Integer fileSize) {
+    protected static MappedFile doLoad(final String path, final Long fileOffset, final Integer fileSize) {
 
         String pathNew = path + UtilAll.offset2FileName(fileOffset);
 
@@ -159,5 +143,13 @@ public class MappedFile {
 
     public static MappedFile findByFileOffset(List<MappedFile> mappedFiles, final Long fileOffset) {
         return mappedFiles.stream().filter(e -> e.getFileFromOffset().equals(fileOffset)).findFirst().orElse(null);
+    }
+
+    public void position(final int lastWritePosition) {
+        this.buffer.position(lastWritePosition);
+    }
+
+    public void setLastWritePosition(final Integer lastWritePosition) {
+        this.lastWritePosition.set(lastWritePosition);
     }
 }

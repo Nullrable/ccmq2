@@ -47,7 +47,24 @@ public class IndexedQueue {
             queueFilePath = home + PATH;
         }
 
-        MappedFile mappedFile = MappedFile.createNew(converterPath(topic, queueId), 0L, FILE_SIZE);
+        MappedFile mappedFile = MappedFile.doLoad(converterPath(topic, queueId), 0L, FILE_SIZE);
+
+        int lastWritePosition = 0;
+        while (true) {
+            long offset = mappedFile.getBuffer().getLong();  // 8字节 commitlog offset
+            int size = mappedFile.getBuffer().getInt();    // 4字节 消息大小
+            long tag = mappedFile.getBuffer().getLong();   // 8字节 tag hashCode
+
+            if (offset >= 0 && size > 0) {
+                // 有效记录，更新索引
+                lastWritePosition = lastWritePosition + 20;
+            } else {
+                break; // 无效/空洞，扫描结束
+            }
+        }
+        mappedFile.setLastWritePosition(lastWritePosition);
+        mappedFile.position(lastWritePosition);
+
         mappedFiles.add(mappedFile);
 
         calTareIndex();
@@ -110,12 +127,12 @@ public class IndexedQueue {
         if (mappedFiles.isEmpty()) {
             // "topic/queueId/00000000000000000000";
 
-            MappedFile mappedFile = MappedFile.createNew(converterPath(topic, queueId), 0L, FILE_SIZE);
+            MappedFile mappedFile = MappedFile.doLoad(converterPath(topic, queueId), 0L, FILE_SIZE);
             mappedFiles.add(mappedFile);
         }
         MappedFile mappedFile = mappedFiles.get(mappedFiles.size() - 1);
         if (mappedFile.isFull(msgSize)) {
-            mappedFile = MappedFile.createNew(converterPath(topic, queueId), mappedFile.getNextFileOffset(), FILE_SIZE);
+            mappedFile = MappedFile.doLoad(converterPath(topic, queueId), mappedFile.getNextFileOffset(), FILE_SIZE);
             mappedFiles.add(mappedFile);
             return mappedFile;
         }

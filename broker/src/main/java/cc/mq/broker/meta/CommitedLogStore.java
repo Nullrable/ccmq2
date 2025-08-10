@@ -3,11 +3,14 @@ package cc.mq.broker.meta;
 import com.alibaba.fastjson.JSON;
 import jakarta.annotation.Resource;
 import java.io.IOException;
+import java.util.Arrays;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
  * @author nhsoft.lsd
  */
+@Slf4j
 @Component
 public class CommitedLogStore {
 
@@ -16,7 +19,9 @@ public class CommitedLogStore {
 
     public void write(String topic, Integer queueId, CCMessage msg) {
         try {
-            commitedLog.write(topic, queueId, JSON.toJSONBytes(msg));
+            byte[] content = JSON.toJSONBytes(msg);
+            log.info("write bytes " + Arrays.toString(content));
+            commitedLog.write(topic, queueId, content);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -28,6 +33,8 @@ public class CommitedLogStore {
             if (bytes == null) {
                 return null;
             }
+            log.info("read bytes " + Arrays.toString(bytes));
+            log.info("read string " + new String(bytes));
             return JSON.parseObject(bytes, CCMessage.class);
 
         } catch (IOException e) {
