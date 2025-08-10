@@ -38,4 +38,14 @@ public class Subscription {
             groupInfo.remove(consumerId);
         }
     }
+
+    public boolean exists(final String consumerGroup) {
+
+        ConsumerGroupInfo groupInfo = consumerGroupInfoTables.get(consumerGroup);
+        if (groupInfo == null) {
+            return false;
+        }
+        return true;
+    }
+
 }

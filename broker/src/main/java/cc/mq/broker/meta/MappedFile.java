@@ -1,6 +1,7 @@
 package cc.mq.broker.meta;
 
 import cc.mq.broker.util.UtilAll;
+import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
@@ -10,6 +11,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -26,19 +28,21 @@ public class MappedFile {
 
     private RandomAccessFile file;
 
-    private Long fileOffset;
+    private Long fileFromOffset;
 
     private Integer fileSize;
 
     private AtomicInteger lastWritePosition;
 
-    public MappedFile(final MappedByteBuffer buffer, final FileChannel fileChannel, final RandomAccessFile file, final Long fileOffset, final Integer fileSize) {
+    public MappedFile(final MappedByteBuffer buffer, final FileChannel fileChannel, final RandomAccessFile file, final Long fileFromOffset, final Integer fileSize) {
         this.buffer = buffer;
         this.fileChannel = fileChannel;
         this.file = file;
-        this.fileOffset = fileOffset;
+        this.fileFromOffset = fileFromOffset;
         this.fileSize = fileSize;
         this.lastWritePosition = new AtomicInteger(0);
+
+        recover();
     }
 
     public boolean isFull(Integer writeFileSize) {
@@ -46,9 +50,29 @@ public class MappedFile {
         return curPos + writeFileSize >= fileSize;
     }
 
-    protected static MappedFile createNew(final String path, final Long fileOffset, final Integer fileSize) throws IOException {
+    private void recover() {
+        while (true) {
+            long offset = buffer.getLong();  // 8字节 commitlog offset
+            int size = buffer.getInt();    // 4字节 消息大小
+            long tag = buffer.getLong();   // 8字节 tag hashCode
+
+            if (offset >= 0 && size > 0) {
+                // 有效记录，更新索引
+                lastWritePosition.set(lastWritePosition.get() + 20);
+            } else {
+                break; // 无效/空洞，扫描结束
+            }
+        }
+        buffer.position(lastWritePosition.get());
+    }
+
+
+    @SneakyThrows
+    protected static MappedFile createNew(final String path, final Long fileOffset, final Integer fileSize) {
 
         String pathNew = path + UtilAll.offset2FileName(fileOffset);
+
+        createFileDir(pathNew);
 
         //获取目录下文件的最大值
         RandomAccessFile file = new RandomAccessFile(pathNew, "rw");
@@ -58,6 +82,17 @@ public class MappedFile {
         MappedByteBuffer buffer = fileChannel.map(FileChannel.MapMode.READ_WRITE, 0, fileSize);
 
         return new MappedFile(buffer, fileChannel, file, fileOffset, fileSize);
+    }
+
+    private static void createFileDir(String path) {
+        // path
+        File file = new File(path);
+
+        // 确保父目录存在
+        File parent = file.getParentFile();
+        if (!parent.exists()) {
+            parent.mkdirs(); // 递归创建目录
+        }
     }
 
     public void appendMessageWhenFull(byte[] data) {
@@ -79,7 +114,7 @@ public class MappedFile {
             } catch (Throwable e) {
                 log.error("Error occurred when append message to mappedFile.", e);
             }
-            lastWritePosition.addAndGet(data.length);
+            lastWritePosition.set(lastWritePosition.get() + data.length);
             return true;
         }
 
@@ -87,7 +122,7 @@ public class MappedFile {
     }
 
     public Long getNextFileOffset() {
-        return fileOffset + fileSize;
+        return fileFromOffset + fileSize;
     }
 
     public void close() {
@@ -109,11 +144,10 @@ public class MappedFile {
 
         byte[] strBytes = new byte[size];
 
+        buffer.position(pos);
         ByteBuffer byteBuffer = this.buffer.slice();
-        byteBuffer.position(pos);
-        ByteBuffer byteBufferNew = byteBuffer.slice();
-        byteBufferNew.limit(size);
-
+        byteBuffer.limit(size);
+        buffer.position(lastWritePosition.get());
         byteBuffer.get(strBytes);
 
         return strBytes;
@@ -124,6 +158,6 @@ public class MappedFile {
     }
 
     public static MappedFile findByFileOffset(List<MappedFile> mappedFiles, final Long fileOffset) {
-        return mappedFiles.stream().filter(e -> e.getFileOffset().equals(fileOffset)).findFirst().orElse(null);
+        return mappedFiles.stream().filter(e -> e.getFileFromOffset().equals(fileOffset)).findFirst().orElse(null);
     }
 }

@@ -6,6 +6,7 @@ import cc.mq.broker.meta.CCMessage;
 import cc.mq.broker.meta.CommitedLogStore;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -13,7 +14,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * @author nhsoft.lsd
  */
-@RestController("/consumer")
+@RestController
+@RequestMapping("/consumer")
 public class ConsumerController {
 
     @Resource
@@ -25,7 +27,7 @@ public class ConsumerController {
     @Resource
     private MessageQueueStore messageQueueStore;
 
-    @PostMapping("/sub")
+    @PostMapping(path = "/sub")
     public void sub(@RequestParam("topic") String topic, @RequestParam("consumer_group") String consumerGroup, @RequestParam("consumer_id") String consumerId) {
         subscriptionStore.sub(topic, consumerGroup, consumerId);
     }
@@ -37,8 +39,8 @@ public class ConsumerController {
 
     @PostMapping("/recv")
     @ResponseBody
-    public CCMessage recv(@RequestParam("topic") String topic, @RequestParam("queue_id") Integer queueId, @RequestParam("offset") Integer offset) {
-        return commitedLogStore.get(topic, queueId, offset);
+    public CCMessage recv(@RequestParam("topic") String topic, @RequestParam("consumer_group") String consumerGroup, @RequestParam("queue_id") Integer queueId, @RequestParam("offset") Integer offset) {
+        return commitedLogStore.get(topic, queueId, offset, consumerGroup);
     }
 
     @PostMapping("/ack")

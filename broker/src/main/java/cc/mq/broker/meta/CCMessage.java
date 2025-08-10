@@ -10,7 +10,7 @@ import lombok.Data;
 @Data
 public class CCMessage {
 
-    private byte[] body;
+    private String body;
 
     private String msgId;
 

@@ -1,6 +1,8 @@
 package cc.mq.broker.meta;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -25,19 +27,50 @@ public class CommitedLog {
 
     private List<MappedFile> mappedFiles = new CopyOnWriteArrayList<>();
 
+    private String commitLogPath;
+
     @Resource
     private IndexedStore indexedStore;
 
-    public byte[] get(final String topic, final Integer queueId, final Integer consumeOffset) throws IOException {
+    @PostConstruct
+    private void init() {
+        String home = System.getProperty("mq.home");
+        if (home == null) {
+            commitLogPath = "C:/Users/nhsof" + PATH;
+        } else {
+            commitLogPath = home + PATH;
+        }
 
-        IndexedMeta indexedMeta = indexedStore.get(topic, queueId, consumeOffset);
+        // 指定目录
+        File dir = new File(commitLogPath);
+        // 判断是否存在并且是目录
+        if (dir.exists() && dir.isDirectory()) {
+            // 列出目录下所有文件
+            File[] files = dir.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    if (file.isFile()) { // 只处理文件
+                        log.info("文件：{}, 加载完成", file.getName());
+                        MappedFile mappedFile = MappedFile.createNew(commitLogPath, Long.valueOf(file.getName()), FILE_SIZE);
+                        mappedFiles.add(mappedFile);
+                    }
+                }
+            }
+        } else {
+            log.warn("目录不存在: {}", dir.getAbsolutePath());
+        }
+    }
+
+    public byte[] get(final String topic, final Integer queueId, final Integer consumeOffset, String consumerGroup) throws IOException {
+
+        IndexedMeta indexedMeta = indexedStore.get(topic, queueId, consumeOffset, consumerGroup);
         if (indexedMeta == null) {
             return null;
         }
 
         long offset = indexedMeta.getOffset();
 
-        long mode = offset % FILE_SIZE;
+        long mode = offset / FILE_SIZE;
 
         long fileOffset = mode * FILE_SIZE;
 
@@ -65,7 +98,7 @@ public class CommitedLog {
             return false;
         }
 
-        long offset = mappedFile.getFileOffset() + lastWritePos;
+        long offset = mappedFile.getFileFromOffset() + lastWritePos;
 
         //写入索引
         IndexedMeta indexedLog = new IndexedMeta();
@@ -73,6 +106,7 @@ public class CommitedLog {
         indexedLog.setOffset(offset);
         indexedLog.setTopic(topic);
         indexedLog.setQueueId(queueId);
+        indexedLog.setTag(0L);
 
         return indexedStore.write(indexedLog);
     }
@@ -80,7 +114,7 @@ public class CommitedLog {
     public MappedFile getLastMappedFile(Integer msgSize) throws IOException {
         if (mappedFiles.isEmpty()) {
 
-            MappedFile mappedFile = MappedFile.createNew(PATH, 0L, FILE_SIZE);
+            MappedFile mappedFile = MappedFile.createNew(commitLogPath, 0L, FILE_SIZE);
             mappedFiles.add(mappedFile);
 
             return mappedFile;
@@ -91,7 +125,7 @@ public class CommitedLog {
         // 预留 8 个字节，用于存储文件结束魔数
         if (mappedFile.isFull(msgSize + END_FILE_MAGIC_CODE_LENGTH)) {
             mappedFile.appendMessageWhenFull(END_FILE_MAGIC_CODE.getBytes(StandardCharsets.UTF_8));
-            mappedFile = MappedFile.createNew(PATH, mappedFile.getNextFileOffset(), FILE_SIZE);
+            mappedFile = MappedFile.createNew(commitLogPath, mappedFile.getNextFileOffset(), FILE_SIZE);
             mappedFiles.add(mappedFile);
         }
 

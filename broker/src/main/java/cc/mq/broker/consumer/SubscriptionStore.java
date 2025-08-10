@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class SubscriptionStore {
 
-    Map<String, Subscription> subscriptions = new ConcurrentHashMap<>();
+    Map<String /* topic */, Subscription> subscriptions = new ConcurrentHashMap<>();
 
     public void sub(String topic, String consumerGroup, String consumerId) {
 
@@ -33,5 +33,9 @@ public class SubscriptionStore {
         if (subscription != null) {
             subscription.removeConsumer(consumerGroup, consumerId);
         }
+    }
+
+    public Subscription get(final String topic) {
+        return subscriptions.get(topic);
     }
 }

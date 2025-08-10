@@ -13,6 +13,8 @@ import lombok.Data;
 @Data
 public class IndexedQueue {
 
+    private static final String PATH = "/store/index/";
+
     public static final int CQ_STORE_UNIT_SIZE = 20;
 
     private static final Integer FILE_SIZE = 6 * 1024 * 1024;
@@ -27,15 +29,28 @@ public class IndexedQueue {
 
     private ByteBuffer byteBufferIndex;
 
+    private String queueFilePath;
+
     /**
      * 这个是当前写入位置，值为 0,1,2,3,4,5. 用户消费者消费时使用
      */
     private AtomicLong tareIndex = new AtomicLong();
 
-
     public IndexedQueue(final String topic, final Integer queueId) {
         this.topic = topic;
         this.queueId = queueId;
+
+        String home = System.getProperty("mq.home");
+        if (home == null) {
+            queueFilePath = "C:/Users/nhsof" + PATH;
+        } else {
+            queueFilePath = home + PATH;
+        }
+
+        MappedFile mappedFile = MappedFile.createNew(converterPath(topic, queueId), 0L, FILE_SIZE);
+        mappedFiles.add(mappedFile);
+
+        calTareIndex();
     }
 
     public Boolean write(IndexedMeta indexed) throws IOException {
@@ -51,7 +66,13 @@ public class IndexedQueue {
         this.byteBufferIndex.putInt(indexed.getLength());
         this.byteBufferIndex.putLong(indexed.getTag());
 
-        return mappedFile.appendMessage(byteBufferIndex.array());
+        boolean success = mappedFile.appendMessage(byteBufferIndex.array());
+
+        if (success) {
+            tareIndex.incrementAndGet();
+        }
+
+        return success;
     }
 
     public IndexedMeta get(final Integer consumeOffset) {
@@ -60,7 +81,7 @@ public class IndexedQueue {
             return null;
         }
 
-        int mode = (consumeOffset * CQ_STORE_UNIT_SIZE) % MAX_POSITION;
+        int mode = (consumeOffset * CQ_STORE_UNIT_SIZE) / MAX_POSITION;
 
         Long fileOffset = (long) mode * MAX_POSITION;
 
@@ -109,16 +130,16 @@ public class IndexedQueue {
         return tareIndex.get();
     }
 
-    public void calCurOffset() {
+    public void calTareIndex() {
         if (mappedFiles.isEmpty()) {
             tareIndex.set(0L);
             return;
         }
         MappedFile mappedFile = mappedFiles.get(mappedFiles.size() - 1);
-        tareIndex.set(mappedFile.getFileOffset() + mappedFile.getLastWritePos() / 20);
+        tareIndex.set(mappedFile.getFileFromOffset() + mappedFile.getLastWritePos() / 20);
     }
 
     public String converterPath(String topic, Integer queueId) {
-        return String.format("%s/%s/", topic, queueId);
+        return queueFilePath + String.format("%s/%s/", topic, queueId);
     }
 }
